@@ -15,16 +15,16 @@ from PIL.ImageFilter import (
    BLUR, CONTOUR, DETAIL, EDGE_ENHANCE, EDGE_ENHANCE_MORE,
    EMBOSS, FIND_EDGES, SMOOTH, SMOOTH_MORE, SHARPEN)
 
-SCALE = 28
-
 class input_pipeline(object):
-    def __init__(self):
+    def __init__(self, SCALE, classes):
 
-        self.SCALE = 28
+        self.SCALE = SCALE
+        self.classes = classes
         self.batch_size = 32
-        self.raw_list = []
+        self.raw_x = []
+        self.raw_y = []
 
-        self.working_dir = "data/"
+        self.working_dir = "/home/rsenic/dataset/"
         self.dir_list = os.listdir(self.working_dir)  
         self.dir_list.sort(key=lambda f: int(''.join(filter(str.isdigit, f))))
 
@@ -33,15 +33,15 @@ class input_pipeline(object):
         data = list(image.getdata())
         data = [data[offset:offset+WIDTH] for offset in range(0,WIDTH*HEIGHT, WIDTH)]
         data = np.array(data)
+        return data
 
     def select_data(self, skip = 8,
                           max_limit = 800,
                           group_size = 800,
-                          start_group = 4,
-                          classes = 4):
+                          start_group = 0):
 
         for i in range(start_group*group_size, 
-                       (start_group*group_size)+(classes*group_size),
+                       (start_group*group_size)+(self.classes*group_size),
                        group_size):
 
             for j in tqdm (range(int(group_size)), desc="Loading..."):    
@@ -51,35 +51,36 @@ class input_pipeline(object):
                     filepath = self.working_dir+'/'+file
 
                     image = Image.open(filepath).convert('L')
-                    image.thumbnail((SCALE,SCALE))
+                    image.thumbnail((self.SCALE,self.SCALE))
                     image = image.filter(EMBOSS)
 
                     # encode image
                     encoded_image = self.encode_pixels(image)
 
-                    self.raw_list.append((encoded_image, int(i/group_size)))
-
-        raw_tnsr = tf.constant(self.raw_list,dtype=tf.float16, name='raw dataset')
-        raw_tnsr = tf.reshape(raw_tnsr,[len(self.raw_list), 1, self.SCALE, self.SCALE, 1])
+                    self.raw_x.append(encoded_image)
+                    self.raw_y.append(int(i/group_size))
         
-        raw_ds = tf.data.Dataset.from_tensor_slices(raw_tnsr)
+        raw_ds = tf.data.Dataset.from_tensor_slices((self.raw_x, self.raw_y))
 
-        cardinality = tf.data.experimental.cardinality(raw_ds)
+        cardinality = int(tf.data.experimental.cardinality(raw_ds))
 
         raw_ds.cache()
         raw_ds.shuffle(buffer_size=cardinality)
         raw_ds.batch(self.batch_size)
         raw_ds.prefetch(buffer_size=tf.data.AUTOTUNE)
-
+        
         test_split = int(cardinality * 0.2)
 
-        test_ds = raw_ds.take(test_split)
+        self.test_ds = raw_ds.take(test_split)
 
         train_ds = raw_ds.skip(test_split)
 
-        val_split = int(tf.data.experimental.cardinality(train_ds) * 0.2)
+        cardinality = int(tf.data.experimental.cardinality(train_ds))
+        val_split = int(cardinality * 0.2)
 
-        train_ds = train_ds.skip(val_split)
-        val_ds = train_ds.take(val_split)
+        self.train_ds = train_ds.skip(val_split)
+        self.val_ds = train_ds.take(val_split)
 
         print('created dataset')
+
+        return self.train_ds, self.val_ds, self.test_ds
