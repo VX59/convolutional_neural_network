@@ -21,10 +21,8 @@ class input_pipeline(object):
         self.SCALE = SCALE
         self.classes = classes
         self.batch_size = 32
-        self.raw_x = []
-        self.raw_y = []
 
-        self.working_dir = "/home/rsenic/dataset/"
+        self.working_dir = "/Users/deros/Downloads/dataset"
         self.dir_list = os.listdir(self.working_dir)  
         self.dir_list.sort(key=lambda f: int(''.join(filter(str.isdigit, f))))
 
@@ -35,13 +33,14 @@ class input_pipeline(object):
         data = np.array(data)
         return data
 
-    def select_data(self, skip = 8,
+    def select_data(self, skip = 1,
                           max_limit = 800,
                           group_size = 800,
                           start_group = 0):
-
+        raw_x = []
+        raw_y = []
         for i in range(start_group*group_size, 
-                       (start_group*group_size)+(self.classes*group_size),
+                       (start_group+self.classes)*group_size,
                        group_size):
 
             for j in tqdm (range(int(group_size)), desc="Loading..."):    
@@ -53,34 +52,25 @@ class input_pipeline(object):
                     image = Image.open(filepath).convert('L')
                     image.thumbnail((self.SCALE,self.SCALE))
                     image = image.filter(EMBOSS)
+                    image = self.encode_pixels(image)
 
-                    # encode image
-                    encoded_image = self.encode_pixels(image)
-
-                    self.raw_x.append(encoded_image)
-                    self.raw_y.append(int(i/group_size))
+                    raw_x.append(image)
+                    raw_y.append(int(i/group_size) - start_group)
         
-        raw_ds = tf.data.Dataset.from_tensor_slices((self.raw_x, self.raw_y))
+        raw_ds = tf.data.Dataset.from_tensor_slices((raw_x, raw_y))
 
         cardinality = int(tf.data.experimental.cardinality(raw_ds))
 
         raw_ds.cache()
-        raw_ds.shuffle(buffer_size=cardinality)
+        #raw_ds.shuffle(buffer_size=cardinality)
         raw_ds.batch(self.batch_size)
-        raw_ds.prefetch(buffer_size=tf.data.AUTOTUNE)
+        raw_ds.prefetch(buffer_size=cardinality)
         
         test_split = int(cardinality * 0.2)
 
         self.test_ds = raw_ds.take(test_split)
-
-        train_ds = raw_ds.skip(test_split)
-
-        cardinality = int(tf.data.experimental.cardinality(train_ds))
-        val_split = int(cardinality * 0.2)
-
-        self.train_ds = train_ds.skip(val_split)
-        self.val_ds = train_ds.take(val_split)
+        self.train_ds = raw_ds.skip(test_split)
 
         print('created dataset')
 
-        return self.train_ds, self.val_ds, self.test_ds
+        return self.train_ds, self.test_ds
