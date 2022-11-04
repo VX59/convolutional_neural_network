@@ -2,14 +2,6 @@ import tensorflow as tf
 import numpy as np
 from keras.models import load_model
 import os
-import os.path as path
-import random
-from PIL import Image
-from PIL import ImageColor
-from PIL import ImageDraw
-from PIL import ImageFont
-from PIL import ImageOps
-from tqdm import tqdm
 import random
 import shutil
 import tensorflow_hub as hub
@@ -40,9 +32,7 @@ class Sorter_Framework(object):
             x_data.append(x)
             y_data.append(y)
 
-        x_data = np.array(x_data)
-        x_data = tf.constant(x_data, dtype=tf.float32)
-        
+        x_data = tf.constant(np.array(x_data), dtype=tf.float32)
         y_data = tf.constant(np.array(y_data), dtype=tf.int16)
 
         return (x_data, y_data)
@@ -54,6 +44,7 @@ class Sorter_Framework(object):
         self.train_ds, self.test_ds = self.input.select_data()
 
         self.train_x, self.train_y = self.split_data(self.train_ds)
+
         self.test_x, self.test_y = self.split_data(self.test_ds)
 
     def load_neural_model(self):
@@ -69,20 +60,20 @@ class Sorter_Framework(object):
 
         self.CNN = tf.keras.Sequential(
         [   
-            #augmentation,
-            tf.keras.layers.Rescaling(1./255),
+            augmentation,
+            tf.keras.layers.BatchNormalization(),
             tf.keras.layers.Reshape((1, self.input_size, self.input_size, 1)),
-            tf.keras.layers.Conv2D(32,(4,4),activation='relu',padding='same'),
+            tf.keras.layers.Conv2D(16,(3,3),activation='relu',padding='same'),
             tf.keras.layers.MaxPool3D(pool_size=(1,3,3)),
             tf.keras.layers.Dropout(0.4),
-            tf.keras.layers.Conv2D(32,(4,4),activation='relu',padding='same'),
+            tf.keras.layers.Conv2D(32,(3,3),activation='relu',padding='same'),
             tf.keras.layers.MaxPool3D(pool_size=(1,3,3)),
             tf.keras.layers.Dropout(0.4),
-            tf.keras.layers.Conv2D(32,(4,4) ,activation='relu',padding='same'),
+            tf.keras.layers.Conv2D(64,(3,3) ,activation='relu',padding='same'),
             tf.keras.layers.MaxPool3D(pool_size=(1,3,3)),
             tf.keras.layers.Dropout(0.4),
             tf.keras.layers.Flatten(),
-            tf.keras.layers.Dense(2000,activation='relu'),
+            tf.keras.layers.Dense(32,activation='relu'),
             tf.keras.layers.Dense(self.class_num, activation='softmax'),
         ])
 
@@ -102,7 +93,7 @@ class Sorter_Framework(object):
         load_model(self.prefix+'/saved_models/MODEL_'+self.name+'.h5')
         self.CNN.load_weights(self.checkpoint_path)
 
-    def train_model(self,persistance,kfold=False,k=0,):
+    def train_model(self,persistance,kfold=False,k=0):
         
         self.checkpoint_dir = os.path.dirname(self.checkpoint_path)
 
@@ -110,7 +101,7 @@ class Sorter_Framework(object):
                                                  save_weights_only=True,
                                                  verbose=1)
 
-        early_stopping = tf.keras.callbacks.EarlyStopping(patience=20)
+        early_stopping = tf.keras.callbacks.EarlyStopping(patience=6)
 
         def train(train_x, train_y, persistance=True):
 
@@ -119,7 +110,7 @@ class Sorter_Framework(object):
             history = self.CNN.fit(
             train_x,
             train_y,
-            epochs=50,
+            epochs=30,
             batch_size= self.input.batch_size,
             validation_split=0.2,
             callbacks=[cp_callback, early_stopping])  # Pass callback to training
@@ -165,7 +156,7 @@ class Sorter_Framework(object):
             
             plt.show()
 
-test_sorter = Sorter_Framework(36, 10)
+test_sorter = Sorter_Framework(36, 4)
 test_sorter.load_data()
 test_sorter.load_neural_model()
 test_sorter.train_model(False)

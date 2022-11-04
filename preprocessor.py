@@ -22,9 +22,9 @@ class input_pipeline(object):
 
         self.SCALE = SCALE
         self.classes = classes
-        self.batch_size = 16
+        self.batch_size = 64
 
-        self.working_dir = "/home/rsenic/dataset"
+        self.working_dir = "/Users/deros/Downloads/dataset"
         self.dir_list = os.listdir(self.working_dir)  
         self.dir_list.sort(key=lambda f: int(''.join(filter(str.isdigit, f))))
 
@@ -60,13 +60,11 @@ class input_pipeline(object):
         
         raw_ds = tf.data.Dataset.from_tensor_slices((raw_x, raw_y))
 
+        raw_ds.cache()
+        raw_ds.batch(self.batch_size)
+
         cardinality = int(tf.data.experimental.cardinality(raw_ds))
 
-        raw_ds.cache()
-        #raw_ds.shuffle(buffer_size=cardinality)
-        #raw_ds.batch(self.batch_size)
-        raw_ds.prefetch(buffer_size=tf.data.AUTOTUNE)
-        
         test_split = int(cardinality * 0.2)
 
         self.test_ds = raw_ds.take(test_split)
@@ -81,10 +79,25 @@ class input_pipeline(object):
         filepath = self.working_dir+'/'+file
 
         image = Image.open(filepath).convert('L')
+        #image.show()
         image.thumbnail((self.SCALE,self.SCALE))
         image = image.filter(FIND_EDGES)
         image = self.encode_pixels(image)
         sample = tf.constant(image, dtype=tf.float32)
-        sample = tf.reshape(sample, (1, self.SCALE, self.SCALE))
+        sample = tf.reshape(sample, [1, self.SCALE, self.SCALE, 1])
 
         return sample
+
+    def split_data(self, dataset):
+        x_data = []
+        y_data = []
+        for x, y in dataset:
+            x_data.append(x)
+            y_data.append(y)
+
+        x_data = np.array(x_data)
+        x_data = tf.constant(x_data, dtype=tf.float32)
+        
+        y_data = tf.constant(np.array(y_data), dtype=tf.int16)
+
+        return (x_data, y_data)
