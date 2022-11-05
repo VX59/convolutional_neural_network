@@ -12,10 +12,11 @@ width = 32
 dataset = input_pipeline(width,classes)
 
 convolution = keras.Sequential([
-    tf.keras.layers.Conv2D(16, 4),
+    tf.keras.layers.Conv2D(16, 3),
     tf.keras.layers.MaxPool2D(pool_size=(2,2), padding='valid'),
-    tf.keras.layers.Conv2D(16, 4),
+    tf.keras.layers.Conv2D(16, 3),
     tf.keras.layers.MaxPool2D(pool_size=(2,2), padding='valid'),
+    tf.keras.layers.Conv2D(16, 3),
     tf.keras.layers.Flatten()
 ])
 
@@ -56,7 +57,6 @@ def avg_points(cluster):
     print("cluster: " , np.array(cluster))
     if len(cluster) > 0:
         shape = len(cluster[0][0])
-        print('shape: ', shape)
         reduced_cluster = np.array(tf.zeros(shape))    # same shape as each data point
         print("cluster size: ",  len(cluster))
         ratio = np.array(tf.fill(shape, len(cluster)))
@@ -105,6 +105,6 @@ while(centroids != new_centroids):
         i += 1 
         centroids = new_centroids
         new_centroids = []
-    print("\n",'-'*75,"\n")
+    print("\n",'-'*50,"\n")
 
 print("cycles: " ,i)
