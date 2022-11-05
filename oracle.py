@@ -7,28 +7,47 @@ import string
 
 from Helper import *
 from neural_models import *
+import numpy as np
 from preprocessor import input_pipeline
-from Sorters import Sorter_Framework
 
 # The Oracle is an intelligent data pipeline that labels and cleans data then feeds it to active learning models
 
 class Oracle(object):
     def __init__(self):
-        self.input = input_pipeline(36, 3)
+        self.class_num = 3
+        self.input = input_pipeline(36, self.class_num)
         # get the dataset and split the train and test folders
         self.dataset = self.input.select_data()
 
-        print("total samples: ", self.y_data.shape[0])
+        print("dataset structure: ", self.dataset)
+        input()
 
-        samples = self.input.classes * 800
+        samples = self.class_num * 800
         self.val_split = int(0.1 * samples)
         self.test_split = int(0.2 * samples)
         self.train_split = int(0.7 * samples)
 
     def train_full_model(self, full_train_dataset, val_dataset, test_dataset, verbose=1):
     
-        model = CNN
-        model.compile(
+        self.CNN = tf.keras.Sequential(
+        [   
+            augmentation,
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.Conv2D(16, 3 ,activation='relu',padding='same'),
+            tf.keras.layers.MaxPool2D(pool_size=(3,3)),
+            tf.keras.layers.Dropout(0.2),
+            tf.keras.layers.Conv2D(32, 3 ,activation='relu',padding='same'),
+            tf.keras.layers.MaxPool2D(pool_size=(3,3)),
+            tf.keras.layers.Dropout(0.2),
+            tf.keras.layers.Conv2D(64, 3 ,activation='relu',padding='same'),
+            tf.keras.layers.MaxPool2D(pool_size=(3,3)),
+            tf.keras.layers.Dropout(0.2),
+            tf.keras.layers.Flatten(),
+            tf.keras.layers.Dense(64,activation='relu'),
+            tf.keras.layers.Dense(64,activation='relu'),
+            tf.keras.layers.Dense(self.class_num, activation='softmax'),
+        ])
+        self.CNN.compile(
             loss="SparseCategoricalCrossentropy",
             optimizer="Adam",
             metrics=[
@@ -37,9 +56,9 @@ class Oracle(object):
                 keras.metrics.FalsePositives()
             ])
 
-        history = model.fit(
+        history = self.CNN.fit(
             full_train_dataset.batch(32),
-            epochs=20,
+            epochs=30,
             validation_data=val_dataset,
             callbacks=[
                 keras.callbacks.EarlyStopping(patience=10, verbose=1),
@@ -64,7 +83,18 @@ class Oracle(object):
 
     def __call__(self,verbose=1):
         
-        # partition the labels into positive / negative
+        # partition the labels into classes 1 -> n
+        for sample in self.dataset:
+            train = sample[0]
+            test = sample[1]
+            self.acm_train, self.acm_test = [], []
+            train_x, train_y = train
+            test_x, test_y = test
+            unique_arr = [x for x in range(self.class_num)]
+            print(unique_arr)
+            input()
+
+        
         self.x_positives, self.y_positives = self.dataset[self.y_data == 1], self.labels[self.labels == 1]
         self.x_negatives, self.y_negatives = self.reviews[self.labels == 0], self.labels[self.labels == 0]
 
@@ -149,4 +179,6 @@ class Oracle(object):
                                self.val_dataset,
                                 self.test_dataset)
 
+oracle = Oracle()
+oracle()
         

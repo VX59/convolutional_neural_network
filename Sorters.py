@@ -62,25 +62,25 @@ class Sorter_Framework(object):
         [   
             augmentation,
             tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.Reshape((1, self.input_size, self.input_size, 1)),
-            tf.keras.layers.Conv2D(16,(3,3),activation='relu',padding='same'),
-            tf.keras.layers.MaxPool3D(pool_size=(1,3,3)),
-            tf.keras.layers.Dropout(0.4),
-            tf.keras.layers.Conv2D(32,(3,3),activation='relu',padding='same'),
-            tf.keras.layers.MaxPool3D(pool_size=(1,3,3)),
-            tf.keras.layers.Dropout(0.4),
-            tf.keras.layers.Conv2D(64,(3,3) ,activation='relu',padding='same'),
-            tf.keras.layers.MaxPool3D(pool_size=(1,3,3)),
-            tf.keras.layers.Dropout(0.4),
+            tf.keras.layers.Conv2D(16, 3 ,activation='relu',padding='same'),
+            tf.keras.layers.MaxPool2D(pool_size=(3,3)),
+            tf.keras.layers.Dropout(0.2),
+            tf.keras.layers.Conv2D(32, 3 ,activation='relu',padding='same'),
+            tf.keras.layers.MaxPool2D(pool_size=(3,3)),
+            tf.keras.layers.Dropout(0.2),
+            tf.keras.layers.Conv2D(64, 3 ,activation='relu',padding='same'),
+            tf.keras.layers.MaxPool2D(pool_size=(3,3)),
+            tf.keras.layers.Dropout(0.2),
             tf.keras.layers.Flatten(),
-            tf.keras.layers.Dense(32,activation='relu'),
+            tf.keras.layers.Dense(64,activation='relu'),
+            tf.keras.layers.Dense(64,activation='relu'),
             tf.keras.layers.Dense(self.class_num, activation='softmax'),
         ])
 
         lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
-            3e-3,
+            2e-3,
             decay_steps=1000,
-            decay_rate=0.98,
+            decay_rate=0.95,
             staircase=True)
 
         optimizer = tf.keras.optimizers.Adam(lr_schedule)
@@ -89,7 +89,7 @@ class Sorter_Framework(object):
               loss=tf.keras.losses.SparseCategoricalCrossentropy(),
               metrics=["accuracy"])
 
-    def load_weights(self):
+    def load(self):
         load_model(self.prefix+'/saved_models/MODEL_'+self.name+'.h5')
         self.CNN.load_weights(self.checkpoint_path)
 
@@ -101,11 +101,13 @@ class Sorter_Framework(object):
                                                  save_weights_only=True,
                                                  verbose=1)
 
-        early_stopping = tf.keras.callbacks.EarlyStopping(patience=6)
+        early_stopping = tf.keras.callbacks.EarlyStopping(patience=12)
 
         def train(train_x, train_y, persistance=True):
 
-            if persistance: self.model.load_weights(self.checkpoint_path)
+            if persistance: 
+                print("loading existing model...")
+                self.load()
 
             history = self.CNN.fit(
             train_x,
@@ -156,7 +158,7 @@ class Sorter_Framework(object):
             
             plt.show()
 
-test_sorter = Sorter_Framework(36, 4)
+test_sorter = Sorter_Framework(32, 10)
 test_sorter.load_data()
 test_sorter.load_neural_model()
 test_sorter.train_model(False)

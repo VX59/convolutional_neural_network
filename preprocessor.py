@@ -1,6 +1,6 @@
 import os
 import glob
-from PIL import Image, ImageFilter,ImageEnhance
+from PIL import Image, ImageFilter,ImageEnhance, ImageOps
 import shutil
 from tqdm import tqdm
 import os.path as path
@@ -44,7 +44,7 @@ class input_pipeline(object):
                        (start_group+self.classes)*group_size,
                        group_size):
 
-            for j in tqdm (range(int(group_size)), desc="Loading..."):    
+            for j in tqdm (range(int(group_size)), desc=f"subset {i}..."):    
                 a = i+j # specific index
                 if j < group_size:
                     file = self.dir_list[a]
@@ -52,7 +52,8 @@ class input_pipeline(object):
 
                     image = Image.open(filepath).convert('L')
                     image.thumbnail((self.SCALE,self.SCALE))
-                    image = image.filter(FIND_EDGES)
+                    #image = image.filter(EMBOSS)
+                    image = ImageOps.invert(image)
                     image = self.encode_pixels(image)
 
                     raw_x.append(image)
@@ -61,7 +62,9 @@ class input_pipeline(object):
         raw_ds = tf.data.Dataset.from_tensor_slices((raw_x, raw_y))
 
         raw_ds.cache()
+        #raw_ds.shuffle(buffer_size=tf.data.experimental.cardinality(raw_ds ))
         raw_ds.batch(self.batch_size)
+        
 
         cardinality = int(tf.data.experimental.cardinality(raw_ds))
 
@@ -101,3 +104,6 @@ class input_pipeline(object):
         y_data = tf.constant(np.array(y_data), dtype=tf.int16)
 
         return (x_data, y_data)
+
+        # add data sharding function to save the dataset
+        # this way we dont have to run the batchin fuction every time we train a sorter
