@@ -36,7 +36,7 @@ class input_pipeline(object):
         return data
 
     def select_data(self, group_size = 800,
-                          start_group = 12):
+                          start_group = 5):
         raw_x = []
         raw_y = []
 

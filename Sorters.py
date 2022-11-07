@@ -62,13 +62,13 @@ class Sorter_Framework(object):
         [   
             augmentation,
             tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.Conv2D(16, 3 ,activation='relu',padding='same'),
+            tf.keras.layers.Conv2D(128, 4 ,activation='relu',padding='same'),
             tf.keras.layers.MaxPool2D(pool_size=(3,3)),
             tf.keras.layers.Dropout(0.2),
-            tf.keras.layers.Conv2D(32, 3 ,activation='relu',padding='same'),
+            tf.keras.layers.Conv2D(64, 4 ,activation='relu',padding='same'),
             tf.keras.layers.MaxPool2D(pool_size=(3,3)),
             tf.keras.layers.Dropout(0.2),
-            tf.keras.layers.Conv2D(64, 3 ,activation='relu',padding='same'),
+            tf.keras.layers.Conv2D(64, 4 ,activation='relu',padding='same'),
             tf.keras.layers.MaxPool2D(pool_size=(3,3)),
             tf.keras.layers.Dropout(0.2),
             tf.keras.layers.Flatten(),
@@ -112,7 +112,7 @@ class Sorter_Framework(object):
             history = self.CNN.fit(
             train_x,
             train_y,
-            epochs=30,
+            epochs=16,
             batch_size= self.input.batch_size,
             validation_split=0.2,
             callbacks=[cp_callback, early_stopping])  # Pass callback to training
@@ -158,7 +158,7 @@ class Sorter_Framework(object):
             
             plt.show()
 
-test_sorter = Sorter_Framework(32, 10)
+test_sorter = Sorter_Framework(64, 5)
 test_sorter.load_data()
 test_sorter.load_neural_model()
 test_sorter.train_model(False)
