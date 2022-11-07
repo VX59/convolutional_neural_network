@@ -7,6 +7,7 @@ import shutil
 import tensorflow_hub as hub
 import matplotlib.pyplot as plt
 import time
+import math
 import matplotlib.pyplot as plt
 
 from neural_models import *
@@ -62,23 +63,22 @@ class Sorter_Framework(object):
         [   
             augmentation,
             tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.Conv2D(128, 4 ,activation='relu',padding='same'),
+            tf.keras.layers.Conv2D(64, 4 ,activation='relu',padding='same'),
             tf.keras.layers.MaxPool2D(pool_size=(3,3)),
             tf.keras.layers.Dropout(0.2),
             tf.keras.layers.Conv2D(64, 4 ,activation='relu',padding='same'),
             tf.keras.layers.MaxPool2D(pool_size=(3,3)),
-            tf.keras.layers.Dropout(0.2),
             tf.keras.layers.Conv2D(64, 4 ,activation='relu',padding='same'),
             tf.keras.layers.MaxPool2D(pool_size=(3,3)),
             tf.keras.layers.Dropout(0.2),
             tf.keras.layers.Flatten(),
-            tf.keras.layers.Dense(64,activation='relu'),
-            tf.keras.layers.Dense(64,activation='relu'),
+            tf.keras.layers.Dense(24,activation='relu'),
+            tf.keras.layers.Dense(24,activation='relu'),
             tf.keras.layers.Dense(self.class_num, activation='softmax'),
         ])
 
         lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
-            2e-3,
+            5e-4,
             decay_steps=1000,
             decay_rate=0.95,
             staircase=True)
@@ -101,7 +101,7 @@ class Sorter_Framework(object):
                                                  save_weights_only=True,
                                                  verbose=1)
 
-        early_stopping = tf.keras.callbacks.EarlyStopping(patience=12)
+        early_stopping = tf.keras.callbacks.EarlyStopping(patience=6)
 
         def train(train_x, train_y, persistance=True):
 
@@ -112,9 +112,9 @@ class Sorter_Framework(object):
             history = self.CNN.fit(
             train_x,
             train_y,
-            epochs=16,
+            epochs=35,
             batch_size= self.input.batch_size,
-            validation_split=0.2,
+            validation_split=0.25,
             callbacks=[cp_callback, early_stopping])  # Pass callback to training
 
             self.CNN.save(self.dimension+'_sorter/saved_models/MODEL_'+self.name+'.h5')
@@ -145,22 +145,23 @@ class Sorter_Framework(object):
         fig = plt.figure(figsize=(10,5))
         
         for x in range(10):
-            sample = self.input.create_sample()
+            sample, image = self.input.create_sample()
             print(sample)
             prediction = self.CNN.predict(sample)
+            print(prediction)
+            print(prediction.shape)
+            input()
             print(np.argmax(prediction))
             for i in subplots:
-                i.bar(list(range(self.input.classes)), np.reshape(prediction), color="blue", width=0.4)
-                i.imshow(sample, interpolation='none')
-
-                i.xlabel("class")
-                i.ylabel("probablility")
-            
+                prediction = tf.reshape(prediction, (prediction.shape[-1]))
+                i.bar(list(range(self.class_num)), prediction, color="blue", width=1.0)
+                #i.imshow(image, interpolation='none')
             plt.show()
+        plt.close()
 
-test_sorter = Sorter_Framework(64, 5)
+test_sorter = Sorter_Framework(48, 4)
 test_sorter.load_data()
 test_sorter.load_neural_model()
 test_sorter.train_model(False)
 test_sorter.plot_training()
-
+test_sorter.make_predictions()

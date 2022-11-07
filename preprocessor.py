@@ -63,7 +63,7 @@ class input_pipeline(object):
 
         raw_ds.cache()
         #raw_ds.shuffle(buffer_size=tf.data.experimental.cardinality(raw_ds ))
-        raw_ds.batch(self.batch_size)
+        #raw_ds.batch(self.batch_size)
         
 
         cardinality = int(tf.data.experimental.cardinality(raw_ds))
@@ -85,11 +85,11 @@ class input_pipeline(object):
         #image.show()
         image.thumbnail((self.SCALE,self.SCALE))
         image = image.filter(FIND_EDGES)
-        image = self.encode_pixels(image)
-        sample = tf.constant(image, dtype=tf.float32)
+        data = self.encode_pixels(image)
+        sample = tf.constant(data, dtype=tf.float32)
         sample = tf.reshape(sample, [1, self.SCALE, self.SCALE, 1])
 
-        return sample
+        return sample, image
 
     def split_data(self, dataset):
         x_data = []
