@@ -18,7 +18,9 @@ class Sorter_Framework(object):
 
         self.input_size = input_size
         self.name = name
+        self.epochs = 35
         self.class_num = class_num
+        self.class_names = range(self.class_num)
         self.dimension = str(self.input_size) + 'x' + str(self.class_num)
         self.prefix = self.dimension + '_sorter/'
         self.checkpoint_path = self.prefix + "model_training/" + self.name + ".ckpt"
@@ -89,8 +91,8 @@ class Sorter_Framework(object):
               loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
               metrics=["accuracy"])
 
-    def load(self):
-        load_model(self.prefix+'/saved_models/MODEL_'+self.name+'.h5')
+    def load_weights(self):
+        self.CNN = load_model(self.prefix+'/saved_models/MODEL_'+self.name+'.h5')
         self.CNN.load_weights(self.checkpoint_path)
 
     def train_model(self,persistance,kfold=False,k=0):
@@ -101,7 +103,7 @@ class Sorter_Framework(object):
                                                  save_weights_only=True,
                                                  verbose=1)
 
-        early_stopping = tf.keras.callbacks.EarlyStopping(patience=20)
+        early_stopping = tf.keras.callbacks.EarlyStopping(patience=int(self.epochs * 0.5))
 
         def train(train_x, train_y, persistance=True):
 
@@ -112,7 +114,7 @@ class Sorter_Framework(object):
             history = self.CNN.fit(
             train_x,
             train_y,
-            epochs=35,
+            epochs=self.epochs,
             batch_size= self.input.batch_size,
             validation_split=0.4,
             callbacks=[cp_callback, early_stopping])  # Pass callback to training
@@ -141,26 +143,39 @@ class Sorter_Framework(object):
     def make_predictions(self):
 
         # get 20 random samples from the test dataset
-        fig, subplots = plt.subplots(10)
-        fig = plt.figure(figsize=(10,5))
-        
-        for x in range(10):
-            sample, label = self.input.create_sample()
+        plt.figure(figsize=(10,10))
+        fig, subplot = plt.subplots(10)
+        for i in subplot:
+            sample, label, image = self.input.create_sample()
             print('label: ', label)
-            prediction = self.CNN.predict_on_batch(sample)
+            prediction = self.CNN.predict(sample)
             print(prediction)
             print(prediction.shape)
+            
+            predicted_label = np.argmax(prediction)
             print("prediction: ", np.argmax(prediction))
-            for i in subplots:
-                prediction = tf.reshape(prediction, (prediction.shape[-1]))
-                i.bar(list(range(self.class_num)), prediction, color="blue", width=1.0)
-                i.bar([label],[1], color="green", width=1.0)
-        plt.show()
-        plt.close()
+            if predicted_label == label:
+                color = 'blue'
+            else:
+                color = 'red'
 
-test_sorter = Sorter_Framework(48, 8)
+            plt.xlabel("{} {:2.0f}% ({})".format(self.class_names[predicted_label],
+                                         prediction[0][predicted_label],
+                                         self.class_names[label]),
+                                         color=color)
+            plt.grid(False)
+            plt.xticks(range(self.class_num))
+            plot = i.bar(self.class_names, prediction[0], color="#777777")
+            plot[predicted_label].set_color('red')
+            plot[label].set_color('blue')
+
+        plt.show()
+            
+
+test_sorter = Sorter_Framework(48, 4)
 test_sorter.load_data()
-test_sorter.load_neural_model()
-test_sorter.train_model(False)
-test_sorter.plot_training()
+#test_sorter.load_neural_model()
+#test_sorter.train_model(False)
+test_sorter.load_weights()
+#test_sorter.plot_training()
 test_sorter.make_predictions()

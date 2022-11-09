@@ -24,7 +24,7 @@ class input_pipeline(object):
         self.classes = classes
         self.batch_size = 16
 
-        self.working_dir = "/home/rsenic/dataset/"
+        self.working_dir = "/Users/deros/Downloads/dataset/"
         self.dir_list = os.listdir(self.working_dir)  
         self.dir_list.sort(key=lambda f: int(''.join(filter(str.isdigit, f))))
 
@@ -130,14 +130,14 @@ class input_pipeline(object):
         filepath = self.working_dir+'/'+file
 
         image = Image.open(filepath).convert('L')
-        image.show()
+        #image.show()
         image.thumbnail((self.SCALE,self.SCALE))
         image = ImageOps.invert(image)
         data = self.encode_pixels(image)
         sample = tf.constant(data, dtype=tf.float32)
         sample = tf.reshape(sample, [1, self.SCALE, self.SCALE, 1])
 
-        return sample, label
+        return sample, label, image
 
         # add data sharding function to save the dataset
         # this way we dont have to run the batchin fuction every time we train a sorter
