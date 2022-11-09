@@ -22,9 +22,9 @@ class input_pipeline(object):
 
         self.SCALE = SCALE
         self.classes = classes
-        self.batch_size = 64
+        self.batch_size = 16
 
-        self.working_dir = "/Users/deros/Downloads/dataset"
+        self.working_dir = "/home/rsenic/dataset/"
         self.dir_list = os.listdir(self.working_dir)  
         self.dir_list.sort(key=lambda f: int(''.join(filter(str.isdigit, f))))
 
@@ -36,7 +36,7 @@ class input_pipeline(object):
         return data
 
     def select_data(self, group_size = 800,
-                          start_group = 5):
+                          start_group = 0):
         raw_x = []
         raw_y = []
 
@@ -52,58 +52,92 @@ class input_pipeline(object):
 
                     image = Image.open(filepath).convert('L')
                     image.thumbnail((self.SCALE,self.SCALE))
-                    #image = image.filter(EMBOSS)
                     image = ImageOps.invert(image)
+                    #image = image.filter(EMBOSS)
                     image = self.encode_pixels(image)
 
                     raw_x.append(image)
                     raw_y.append(int(i/group_size) - start_group)
+
+        x_count = [[] for _ in range(self.classes)]
+        y_count = [[] for _ in range(self.classes)]
         
-        raw_ds = tf.data.Dataset.from_tensor_slices((raw_x, raw_y))
+        print(y_count)
+        print(x_count)
 
-        raw_ds.cache()
-        #raw_ds.shuffle(buffer_size=tf.data.experimental.cardinality(raw_ds ))
-        #raw_ds.batch(self.batch_size)
-        
+        a = 0
+        for y in raw_y:
+            for i in range(0, self.classes):
+                if y == i:
+                    x_count[i].append(raw_x[a])
+                    y_count[i].append(y)
+                    break
+            a += 1
 
-        cardinality = int(tf.data.experimental.cardinality(raw_ds))
+        x_count = np.array(x_count)
+        y_count = np.array(y_count)
 
-        test_split = int(cardinality * 0.2)
+        print(y_count.shape)
+        print(y_count)
 
-        self.test_ds = raw_ds.take(test_split)
-        self.train_ds = raw_ds.skip(test_split)
+        # now we have separated our x y into respective classses, we need to partition into train and test
+        split = int(y_count.shape[1] * 0.2)
 
-        print('created dataset')
+        train_x_sep = np.array([x[split:] for x in x_count])
+        test_x_sep = np.array([x[:split] for x in x_count])
 
-        return self.train_ds, self.test_ds
+        print(train_x_sep.shape)
+        print(test_x_sep.shape)
+        train_y_sep = np.array([y[split:] for y in y_count])
+        test_y_sep = np.array([y[:split] for y in y_count])
+
+        print(train_y_sep.shape)
+        print(test_y_sep.shape)
+
+        train_x = np.reshape(train_x_sep, (train_x_sep.shape[0] * train_x_sep.shape[1], self.SCALE, self.SCALE))
+        test_x = np.reshape(test_x_sep, (test_x_sep.shape[0] * test_x_sep.shape[1], self.SCALE, self.SCALE))
+
+        train_y = np.reshape(train_y_sep, (train_y_sep.shape[0] * train_y_sep.shape[1]))
+        test_y = np.reshape(test_y_sep, (test_y_sep.shape[0] * test_y_sep.shape[1]))
+    
+        print("len train,", np.array(train_x).shape,
+                            np.array(train_y).shape,
+              "len test, ", np.array(test_x).shape,
+                            np.array(test_y).shape)
+
+        train_ds = tf.data.Dataset.from_tensor_slices((train_x, train_y)) 
+        print('created train dataset')
+        test_ds = tf.data.Dataset.from_tensor_slices((test_x, test_y))
+        print('created test dataset')
+
+        cardinality = int(tf.data.experimental.cardinality(train_ds))
+
+        train_ds = train_ds.cache()
+        train_ds = train_ds.shuffle(buffer_size=cardinality)
+
+        cardinality = int(tf.data.experimental.cardinality(test_ds))
+
+        test_ds = test_ds.cache()
+        test_ds = test_ds.shuffle(buffer_size=cardinality)
+
+        return train_ds, test_ds
 
     def create_sample(self):
-        file = self.dir_list[random.randint(0,(self.classes * 800))]
+        index = random.randint(0,(self.classes * 800))
+        print(index)
+        label = int(index / 800)
+        file = self.dir_list[index]
         filepath = self.working_dir+'/'+file
 
         image = Image.open(filepath).convert('L')
-        #image.show()
+        image.show()
         image.thumbnail((self.SCALE,self.SCALE))
-        image = image.filter(FIND_EDGES)
+        image = ImageOps.invert(image)
         data = self.encode_pixels(image)
         sample = tf.constant(data, dtype=tf.float32)
         sample = tf.reshape(sample, [1, self.SCALE, self.SCALE, 1])
 
-        return sample, image
-
-    def split_data(self, dataset):
-        x_data = []
-        y_data = []
-        for x, y in dataset:
-            x_data.append(x)
-            y_data.append(y)
-
-        x_data = np.array(x_data)
-        x_data = tf.constant(x_data, dtype=tf.float32)
-        
-        y_data = tf.constant(np.array(y_data), dtype=tf.int16)
-
-        return (x_data, y_data)
+        return sample, label
 
         # add data sharding function to save the dataset
         # this way we dont have to run the batchin fuction every time we train a sorter

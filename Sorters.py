@@ -63,22 +63,22 @@ class Sorter_Framework(object):
         [   
             augmentation,
             tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.Conv2D(64, 4 ,activation='relu',padding='same'),
-            tf.keras.layers.MaxPool2D(pool_size=(3,3)),
-            tf.keras.layers.Dropout(0.2),
-            tf.keras.layers.Conv2D(64, 4 ,activation='relu',padding='same'),
-            tf.keras.layers.MaxPool2D(pool_size=(3,3)),
-            tf.keras.layers.Conv2D(64, 4 ,activation='relu',padding='same'),
-            tf.keras.layers.MaxPool2D(pool_size=(3,3)),
-            tf.keras.layers.Dropout(0.2),
-            tf.keras.layers.Flatten(),
-            tf.keras.layers.Dense(24,activation='relu'),
-            tf.keras.layers.Dense(24,activation='relu'),
-            tf.keras.layers.Dense(self.class_num, activation='softmax'),
+            tf.keras.layers.Conv2D(32, 4 ,activation='relu',padding='same'),
+            tf.keras.layers.MaxPool2D(pool_size=(2,2)),
+            tf.keras.layers.Dropout(0.3),
+            tf.keras.layers.Conv2D(32, 4 ,activation='relu',padding='same'),
+            tf.keras.layers.MaxPool2D(pool_size=(2,2)),
+            tf.keras.layers.Dropout(0.3),
+            tf.keras.layers.Conv2D(32, 4 ,activation='relu',padding='same'),
+            tf.keras.layers.MaxPool2D(pool_size=(2,2)),
+            tf.keras.layers.Dropout(0.3),
+            tf.keras.layers.Flatten(), 
+            tf.keras.layers.Dense(128,activation='relu'),
+            tf.keras.layers.Dense(self.class_num),
         ])
 
         lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
-            5e-4,
+            1e-3,
             decay_steps=1000,
             decay_rate=0.95,
             staircase=True)
@@ -86,7 +86,7 @@ class Sorter_Framework(object):
         optimizer = tf.keras.optimizers.Adam(lr_schedule)
 
         self.CNN.compile(optimizer=optimizer,
-              loss=tf.keras.losses.SparseCategoricalCrossentropy(),
+              loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
               metrics=["accuracy"])
 
     def load(self):
@@ -101,7 +101,7 @@ class Sorter_Framework(object):
                                                  save_weights_only=True,
                                                  verbose=1)
 
-        early_stopping = tf.keras.callbacks.EarlyStopping(patience=6)
+        early_stopping = tf.keras.callbacks.EarlyStopping(patience=20)
 
         def train(train_x, train_y, persistance=True):
 
@@ -114,7 +114,7 @@ class Sorter_Framework(object):
             train_y,
             epochs=35,
             batch_size= self.input.batch_size,
-            validation_split=0.25,
+            validation_split=0.4,
             callbacks=[cp_callback, early_stopping])  # Pass callback to training
 
             self.CNN.save(self.dimension+'_sorter/saved_models/MODEL_'+self.name+'.h5')
@@ -145,21 +145,20 @@ class Sorter_Framework(object):
         fig = plt.figure(figsize=(10,5))
         
         for x in range(10):
-            sample, image = self.input.create_sample()
-            print(sample)
-            prediction = self.CNN.predict(sample)
+            sample, label = self.input.create_sample()
+            print('label: ', label)
+            prediction = self.CNN.predict_on_batch(sample)
             print(prediction)
             print(prediction.shape)
-            input()
-            print(np.argmax(prediction))
+            print("prediction: ", np.argmax(prediction))
             for i in subplots:
                 prediction = tf.reshape(prediction, (prediction.shape[-1]))
                 i.bar(list(range(self.class_num)), prediction, color="blue", width=1.0)
-                #i.imshow(image, interpolation='none')
-            plt.show()
+                i.bar([label],[1], color="green", width=1.0)
+        plt.show()
         plt.close()
 
-test_sorter = Sorter_Framework(48, 4)
+test_sorter = Sorter_Framework(48, 8)
 test_sorter.load_data()
 test_sorter.load_neural_model()
 test_sorter.train_model(False)
