@@ -1,9 +1,6 @@
 import os
-import glob
 from PIL import Image, ImageFilter,ImageEnhance, ImageOps
-import shutil
 from tqdm import tqdm
-import os.path as path
 import numpy as np
 import tensorflow as tf
 import tempfile
@@ -22,11 +19,14 @@ class input_pipeline(object):
 
         self.SCALE = SCALE
         self.classes = classes
-        self.batch_size = 16
+        self.batch_size = 32
 
-        self.working_dir = "/Users/deros/Downloads/dataset/"
+        self.working_dir = "/home/rsenic/dataset/"
         self.dir_list = os.listdir(self.working_dir)  
         self.dir_list.sort(key=lambda f: int(''.join(filter(str.isdigit, f))))
+
+        self.train_ds_path = os.path.join(tempfile.gettempdir(),"tf_train_ds")
+        self.test_ds_path = os.path.join(tempfile.gettempdir(),"tf_test_ds")
 
     def encode_pixels(self, image):
         WIDTH, HEIGHT = image.size
@@ -44,7 +44,7 @@ class input_pipeline(object):
                        (start_group+self.classes)*group_size,
                        group_size):
 
-            for j in tqdm (range(int(group_size)), desc=f"subset {i}..."):    
+            for j in tqdm (range(int(group_size)), desc=f"subset {i/800}..."):    
                 a = i+j # specific index
                 if j < group_size:
                     file = self.dir_list[a]
@@ -110,14 +110,33 @@ class input_pipeline(object):
         test_ds = tf.data.Dataset.from_tensor_slices((test_x, test_y))
         print('created test dataset')
 
+        # save datasets
+
+        if not os.path.isdir("tf_train_ds"): os.mkdir("tf_train_ds")
+
+        if not os.path.isdir("tf_test_ds"): os.mkdir("tf_test_ds")
+
+        tf.data.experimental.save(train_ds, self.train_ds_path)
+
+        tf.data.experimental.save(test_ds, self.test_ds_path)
+        
+        print("successfully saved tensorflow datasets")
+        
+    def prepare_datasets(self):
+        
+        train_ds = tf.data.experimental.load(self.train_ds_path)
+        test_ds = tf.data.experimental.load(self.test_ds_path)
+
         cardinality = int(tf.data.experimental.cardinality(train_ds))
 
         train_ds = train_ds.cache()
+        train_ds = train_ds.prefetch(buffer_size=tf.data.AUTOTUNE)
         train_ds = train_ds.shuffle(buffer_size=cardinality)
 
         cardinality = int(tf.data.experimental.cardinality(test_ds))
 
         test_ds = test_ds.cache()
+        test_ds = test_ds.prefetch(buffer_size=tf.data.AUTOTUNE)
         test_ds = test_ds.shuffle(buffer_size=cardinality)
 
         return train_ds, test_ds
@@ -137,6 +156,3 @@ class input_pipeline(object):
         sample = tf.reshape(sample, [1, self.SCALE, self.SCALE, 1])
 
         return sample, label, image
-
-        # add data sharding function to save the dataset
-        # this way we dont have to run the batchin fuction every time we train a sorter

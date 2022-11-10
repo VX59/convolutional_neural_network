@@ -2,12 +2,7 @@ import tensorflow as tf
 import numpy as np
 from keras.models import load_model
 import os
-import random
-import shutil
-import tensorflow_hub as hub
 import matplotlib.pyplot as plt
-import time
-import math
 import matplotlib.pyplot as plt
 
 from neural_models import *
@@ -18,7 +13,7 @@ class Sorter_Framework(object):
 
         self.input_size = input_size
         self.name = name
-        self.epochs = 35
+        self.epochs = 100
         self.class_num = class_num
         self.class_names = range(self.class_num)
         self.dimension = str(self.input_size) + 'x' + str(self.class_num)
@@ -44,7 +39,9 @@ class Sorter_Framework(object):
 
         self.input = input_pipeline(self.input_size, self.class_num)
 
-        self.train_ds, self.test_ds = self.input.select_data()
+        if not os.path.isdir("tf_test_ds") and not os.path.isdir("tf_train_ds"): self.input.select_data()
+
+        self.train_ds, self.test_ds = self.input.prepare_datasets()
 
         self.train_x, self.train_y = self.split_data(self.train_ds)
 
@@ -65,18 +62,18 @@ class Sorter_Framework(object):
         [   
             augmentation,
             tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.Conv2D(32, 4 ,activation='relu',padding='same'),
+            tf.keras.layers.Conv2D(64, 4 ,activation='relu',padding='same'),
             tf.keras.layers.MaxPool2D(pool_size=(2,2)),
             tf.keras.layers.Dropout(0.3),
-            tf.keras.layers.Conv2D(32, 4 ,activation='relu',padding='same'),
+            tf.keras.layers.Conv2D(64, 4 ,activation='relu',padding='same'),
             tf.keras.layers.MaxPool2D(pool_size=(2,2)),
             tf.keras.layers.Dropout(0.3),
-            tf.keras.layers.Conv2D(32, 4 ,activation='relu',padding='same'),
+            tf.keras.layers.Conv2D(64, 4 ,activation='relu',padding='same'),
             tf.keras.layers.MaxPool2D(pool_size=(2,2)),
             tf.keras.layers.Dropout(0.3),
             tf.keras.layers.Flatten(), 
-            tf.keras.layers.Dense(128,activation='relu'),
-            tf.keras.layers.Dense(self.class_num),
+            tf.keras.layers.Dense(256,activation='relu'),
+            tf.keras.layers.Dense(self.class_num, activation='softmax'),
         ])
 
         lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
@@ -142,8 +139,7 @@ class Sorter_Framework(object):
 
     def make_predictions(self):
 
-        # get 20 random samples from the test dataset
-        plt.figure(figsize=(10,10))
+        # get random samples from the test dataset
         fig, subplot = plt.subplots(10)
         for i in subplot:
             sample, label, image = self.input.create_sample()
@@ -172,7 +168,7 @@ class Sorter_Framework(object):
         plt.show()
             
 
-test_sorter = Sorter_Framework(48, 4)
+test_sorter = Sorter_Framework(96,49)
 test_sorter.load_data()
 #test_sorter.load_neural_model()
 #test_sorter.train_model(False)
