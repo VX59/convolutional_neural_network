@@ -103,3 +103,4 @@ class Object_Detection(object):
             result["detection_class_entities"], result["detection_scores"])
 
         self.display_image(image_with_boxes)
+

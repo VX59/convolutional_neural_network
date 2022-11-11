@@ -130,7 +130,6 @@ class input_pipeline(object):
         filepath = self.working_dir+'/'+file
 
         image = Image.open(filepath).convert('L')
-        #image.show()
         image.thumbnail((self.SCALE,self.SCALE))
         image = ImageOps.invert(image)
         data = self.encode_pixels(image)
