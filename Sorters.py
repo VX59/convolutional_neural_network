@@ -238,7 +238,7 @@ class Sorter_Framework(object):
 
         plt.show()
 
-test_sorter = Sorter_Framework(32,4)
+test_sorter = Sorter_Framework(32,8)
 
 def make_sorter():
     if os.path.isdir("tf_test_ds"): os.rmdir("tf_test_ds")
