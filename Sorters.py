@@ -5,13 +5,14 @@ import os
 import matplotlib.pyplot as plt
 from preprocessor import *
 import random
+import shutil
 
 class Sorter_Framework(object):
     def __init__(self,input_size,class_num=0,name=''):
 
         self.input_size = input_size
         self.name = name
-        self.epochs = 10
+        self.epochs = 12
         self.class_num = class_num
         self.class_names = range(self.class_num)
         self.dimension = str(self.input_size) + 'x' + str(self.class_num)
@@ -36,10 +37,21 @@ class Sorter_Framework(object):
     def load_data(self,kfold=True):
 
         self.input = preprocessor(self.input_size, self.class_num)
-        if kfold: 
-            fold_datasets, test_ds = self.input.select_data(kfold=True)
-            self.fold_x = []
-            self.fold_y = []
+        if kfold:
+            if os.path.isdir("tf_fold_ds"):
+                fold_datasets = np.array([])
+                test_ds_path = os.path.join(tempfile.gettempdir(),"tf_test_ds")
+                test_ds = tf.data.experimental.load(test_ds_path)
+                list_dir = os.listdir("tf_fold_ds")
+                for dspath in list_dir:
+                    dataset = tf.data.experimental.load("tf_fold_ds/")
+                    print(dataset)
+                    np.append(fold_datasets, dataset)
+                    print(fold_datasets.shape)
+            else:
+                fold_datasets, test_ds = self.input.select_data(kfold=True)
+                self.fold_x = []
+                self.fold_y = []
             
             for fold in fold_datasets:
                 fold_x, fold_y = self.split_data(fold)
@@ -65,7 +77,7 @@ class Sorter_Framework(object):
         [   
             augmentation,
             tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.Conv2D(64, 4 ,activation='relu',padding='same'),
+            tf.keras.layers.Conv2D(96, 4 ,activation='relu',padding='same'),
             tf.keras.layers.MaxPool2D(pool_size=(2,2)),
             tf.keras.layers.Dropout(0.3),
             tf.keras.layers.Conv2D(64, 4 ,activation='relu',padding='same'),
@@ -76,7 +88,7 @@ class Sorter_Framework(object):
             tf.keras.layers.Dropout(0.3),
             tf.keras.layers.Flatten(), 
             tf.keras.layers.Dense(256,activation='relu'),
-            tf.keras.layers.Dense(self.class_num, activation='softmax'),
+            tf.keras.layers.Dense(self.class_num),
         ])
 
         lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
@@ -145,7 +157,7 @@ class Sorter_Framework(object):
                 self.models.append(CNN)
                 test_loss, test_acc = CNN.evaluate(self.test_x, self.test_y, verbose=2)
                 print('test accuracy: ', test_acc, '\n', 'test loss', test_loss)
-                self.plot_training(self.history_ensemble[k])
+                self.plot_training(self.history_ensemble[k], f"model_{k}")
                 
         else:
             self.CNN = self.load_neural_model()
@@ -154,7 +166,10 @@ class Sorter_Framework(object):
             print('test accuracy: ', test_acc, '\n', 'test loss', test_loss)
             return test_loss, test_acc
 
-    def plot_training(self, history_obj):
+    def plot_training(self, history_obj, name):
+        plot_path = self.prefix+'training_plots/'
+        if not os.path.isdir(plot_path): os.mkdir(plot_path)
+
         print(history_obj.history.keys())
         fig, (ax1, ax2) = plt.subplots(2)
         ax1.plot(history_obj.history['loss'], label="loss")
@@ -163,7 +178,7 @@ class Sorter_Framework(object):
         ax2.plot(history_obj.history['val_loss'], label="val_loss")
         ax2.plot(history_obj.history['val_accuracy'], label="val_acc")
         ax2.legend(['val loss', 'val accuracy'], loc='lower left')
-        plt.show()
+        plt.savefig(plot_path+name+".png")
 
     def make_predictions_from_ensemble(self):
         fig, subplot = plt.subplots(10)
@@ -182,14 +197,20 @@ class Sorter_Framework(object):
             prediction_avg = np.divide(predictions_acm, len(self.models))
             print(prediction_avg)
             print(prediction_avg.shape)
-            prediction = np.argmax(prediction_avg)
-            print(prediction)
-            input()
+            predicted_label = np.argmax(prediction_avg)
+            print(predicted_label)
 
+            plt.grid(False)
+            plt.xticks(range(self.class_num))
+            plot = i.bar(self.class_names, prediction[0], color="#777777")
+            plot[predicted_label].set_color('red')
+            plot[label].set_color('blue')
+
+        plt.savefig(self.prefix+'predictions.png')
+        plt.show()
 
     def make_predictions(self):
 
-        # get random samples from the test dataset
         fig, subplot = plt.subplots(10)
         for i in subplot:
             sample, label, image = self.input.create_sample()
@@ -216,13 +237,20 @@ class Sorter_Framework(object):
             plot[label].set_color('blue')
 
         plt.show()
-            
 
-test_sorter = Sorter_Framework(28,10)
-test_sorter.load_data()
-test_sorter.train_model(False)
-#test_sorter.load_ensemble()
-test_sorter.make_predictions_from_ensemble()
-#test_sorter.load_weights()
-#test_sorter.plot_training()
-#test_sorter.make_predictions()
+test_sorter = Sorter_Framework(32,4)
+
+def make_sorter():
+    if os.path.isdir("tf_test_ds"): os.rmdir("tf_test_ds")
+    if os.path.isdir("tf_train_ds"): os.rmdir("tf_train_ds")
+    if os.path.isdir("tf_fold_ds"): shutil.rmtree("tf_fold_ds")
+    test_sorter.load_data()
+    test_sorter.train_model(False)
+
+def get_predictions():
+    test_sorter.load_data()
+    test_sorter.load_ensemble()
+    test_sorter.make_predictions_from_ensemble()
+
+make_sorter()
+get_predictions()

@@ -30,9 +30,6 @@ class preprocessor(object):
         self.dir_list = os.listdir(self.working_dir)  
         self.dir_list.sort(key=lambda f: int(''.join(filter(str.isdigit, f))))
 
-        self.train_ds_path = os.path.join(tempfile.gettempdir(),"tf_train_ds")
-        self.test_ds_path = os.path.join(tempfile.gettempdir(),"tf_test_ds")
-
     def encode_pixels(self, image):
         WIDTH, HEIGHT = image.size
         data = list(image.getdata())
@@ -41,7 +38,9 @@ class preprocessor(object):
         return data
 
     def select_data(self, group_size = 800,
-                          start_group = 0, kfold=False):
+                          start_group = 0,
+                          kfold=False,
+                          get_test=False):
         raw_x = []
         raw_y = []
 
@@ -49,7 +48,7 @@ class preprocessor(object):
                        (start_group+self.classes)*group_size,
                        group_size):
 
-            for j in tqdm (range(int(group_size)), desc=f"subset {i/800}..."):    
+            for j in tqdm (range(int(group_size)), desc=f"subset {int(i/800)+1}/{self.classes} "):    
                 a = i+j # specific index
                 if j < group_size:
                     file = self.dir_list[a]
@@ -104,6 +103,9 @@ class preprocessor(object):
         test_ds = tf.data.Dataset.from_tensor_slices((test_x, test_y))
         print('created test dataset')
 
+        self.train_ds_path = os.path.join(tempfile.gettempdir(),"tf_train_ds")
+        self.test_ds_path = os.path.join(tempfile.gettempdir(),"tf_test_ds")
+
         cardinality = int(tf.data.experimental.cardinality(test_ds))
 
         test_ds = test_ds.cache()
@@ -128,7 +130,6 @@ class preprocessor(object):
                                 np.array(train_y).shape,
                   "len test, ", np.array(test_x).shape,
                                 np.array(test_y).shape)
-
             return train_ds, test_ds
         else: 
             folded_training_datasets = self.chop_and_fold(train_x_sep, train_y_sep)
