@@ -3,23 +3,21 @@ import numpy as np
 from keras.models import load_model
 import os
 import matplotlib.pyplot as plt
-import matplotlib.pyplot as plt
-
-from neural_models import *
-from preprocessor import input_pipeline
+from preprocessor import *
+import random
 
 class Sorter_Framework(object):
     def __init__(self,input_size,class_num=0,name=''):
 
         self.input_size = input_size
         self.name = name
-        self.epochs = 100
+        self.epochs = 10
         self.class_num = class_num
         self.class_names = range(self.class_num)
         self.dimension = str(self.input_size) + 'x' + str(self.class_num)
         self.prefix = self.dimension + '_sorter/'
         self.checkpoint_path = self.prefix + "model_training/" + self.name + ".ckpt"
-
+        if not os.path.isdir(self.prefix): os.mkdir(self.prefix)
     def rename_model(self,name):
         self.name = name
 
@@ -35,30 +33,35 @@ class Sorter_Framework(object):
 
         return (x_data, y_data)
 
-    def load_data(self,folds=10):
+    def load_data(self,kfold=True):
 
-        self.input = input_pipeline(self.input_size, self.class_num)
+        self.input = preprocessor(self.input_size, self.class_num)
+        if kfold: 
+            fold_datasets, test_ds = self.input.select_data(kfold=True)
+            self.fold_x = []
+            self.fold_y = []
+            
+            for fold in fold_datasets:
+                fold_x, fold_y = self.split_data(fold)
+                self.fold_x.append(fold_x)
+                self.fold_y.append(fold_y)
+            self.test_x, self.test_y = self.split_data(test_ds)
+        else:
+            train_ds, test_ds = self.input.select_data()
+            self.train_x, self.train_y = self.split_data(train_ds)
+            self.test_x, self.test_y = self.split_data(test_ds)
 
-        if not os.path.isdir("tf_test_ds") and not os.path.isdir("tf_train_ds"): self.input.select_data()
-
-        self.train_ds, self.test_ds = self.input.prepare_datasets()
-
-        self.train_x, self.train_y = self.split_data(self.train_ds)
-
-        self.test_x, self.test_y = self.split_data(self.test_ds)
-
-    def load_neural_model(self):
+    def load_neural_model(self, shake=0.1):
 
         augmentation = tf.keras.Sequential(
             [
                 tf.keras.layers.RandomFlip("horizontal",
-                                           input_shape=(self.input_size,
-                                           self.input_size, 1)),
-                tf.keras.layers.RandomRotation(0.1),
-                tf.keras.layers.RandomZoom(0.1)
+                                           input_shape=(self.input_size, self.input_size, 1)),
+                tf.keras.layers.RandomRotation(shake),
+                tf.keras.layers.RandomZoom(shake)
             ])
 
-        self.CNN = tf.keras.Sequential(
+        CNN = tf.keras.Sequential(
         [   
             augmentation,
             tf.keras.layers.BatchNormalization(),
@@ -84,15 +87,25 @@ class Sorter_Framework(object):
 
         optimizer = tf.keras.optimizers.Adam(lr_schedule)
 
-        self.CNN.compile(optimizer=optimizer,
+        CNN.compile(optimizer=optimizer,
               loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
               metrics=["accuracy"])
+
+        return CNN
 
     def load_weights(self):
         self.CNN = load_model(self.prefix+'/saved_models/MODEL_'+self.name+'.h5')
         self.CNN.load_weights(self.checkpoint_path)
 
-    def train_model(self,persistance,kfold=False,k=0):
+    def load_ensemble(self):
+        self.models = []
+        for name in os.listdir(self.prefix+'saved_models/'):
+            print(name)
+            model = load_model(self.prefix+'saved_models/'+name)
+            model.load_weights(self.checkpoint_path)
+            self.models.append(model)
+
+    def train_model(self, persistance,kfold=True):
         
         self.checkpoint_dir = os.path.dirname(self.checkpoint_path)
 
@@ -102,13 +115,12 @@ class Sorter_Framework(object):
 
         early_stopping = tf.keras.callbacks.EarlyStopping(patience=int(self.epochs * 0.5))
 
-        def train(train_x, train_y, persistance=True):
-
+        def train(model, train_x, train_y, i=0, persistance=persistance):
             if persistance: 
                 print("loading existing model...")
-                self.load()
+                self.load() # fix
 
-            history = self.CNN.fit(
+            history = model.fit(
             train_x,
             train_y,
             epochs=self.epochs,
@@ -116,26 +128,64 @@ class Sorter_Framework(object):
             validation_split=0.4,
             callbacks=[cp_callback, early_stopping])  # Pass callback to training
 
-            self.CNN.save(self.dimension+'_sorter/saved_models/MODEL_'+self.name+'.h5')
+            model.save(self.dimension+f'_sorter/saved_models/MODEL_{i}'+self.name+'.h5')
 
             return history 
 
-        self.history = train(self.train_x, self.train_y, persistance=persistance)
+        if kfold:
+            self.models = []
+            self.history_ensemble = []
+            for k in range(len(self.fold_x)):
+                print("fold: ", k)
+                CNN = self.load_neural_model()
+                for j in range(len(self.fold_x)):
+                    if j != k:
+                        history = train(CNN, self.fold_x[j], self.fold_y[j], i=k, persistance=persistance)
+                        self.history_ensemble.append(history)
+                self.models.append(CNN)
+                test_loss, test_acc = CNN.evaluate(self.test_x, self.test_y, verbose=2)
+                print('test accuracy: ', test_acc, '\n', 'test loss', test_loss)
+                self.plot_training(self.history_ensemble[k])
+                
+        else:
+            self.CNN = self.load_neural_model()
+            self.history = train(self.CNN, self.train_x, self.train_y, persistance=persistance)
+            test_loss, test_acc = self.CNN.evaluate(self.test_x, self.test_y, verbose=2)
+            print('test accuracy: ', test_acc, '\n', 'test loss', test_loss)
+            return test_loss, test_acc
 
-        test_loss, test_acc = self.CNN.evaluate(self.test_x, self.test_y, verbose=2)
-        print('test accuracy: ', test_acc, '\n', 'test loss', test_loss)
-        return test_loss, test_acc
-
-    def plot_training(self):
-        print(self.history.history.keys())
+    def plot_training(self, history_obj):
+        print(history_obj.history.keys())
         fig, (ax1, ax2) = plt.subplots(2)
-        ax1.plot(self.history.history['loss'], label="loss")
-        ax1.plot(self.history.history['accuracy'], label="acc")
+        ax1.plot(history_obj.history['loss'], label="loss")
+        ax1.plot(history_obj.history['accuracy'], label="acc")
         ax1.legend(['loss', 'accuracy'], loc='lower left')
-        ax2.plot(self.history.history['val_loss'], label="val_loss")
-        ax2.plot(self.history.history['val_accuracy'], label="val_acc")
+        ax2.plot(history_obj.history['val_loss'], label="val_loss")
+        ax2.plot(history_obj.history['val_accuracy'], label="val_acc")
         ax2.legend(['val loss', 'val accuracy'], loc='lower left')
         plt.show()
+
+    def make_predictions_from_ensemble(self):
+        fig, subplot = plt.subplots(10)
+        for i in subplot:
+            sample, label, image = self.input.create_sample()
+            print('label: ', label)
+            m = 0
+            predictions_acm = []
+            for model in self.models:
+                prediction = model.predict(sample)
+                if m == 0: predictions_acm = prediction
+                else: predictions_acm = np.add(predictions_acm, prediction)
+                m += 1
+
+            
+            prediction_avg = np.divide(predictions_acm, len(self.models))
+            print(prediction_avg)
+            print(prediction_avg.shape)
+            prediction = np.argmax(prediction_avg)
+            print(prediction)
+            input()
+
 
     def make_predictions(self):
 
@@ -149,7 +199,7 @@ class Sorter_Framework(object):
             print(prediction.shape)
             
             predicted_label = np.argmax(prediction)
-            print("prediction: ", np.argmax(prediction))
+            print("prediction: ", predicted_label)
             if predicted_label == label:
                 color = 'blue'
             else:
@@ -168,10 +218,11 @@ class Sorter_Framework(object):
         plt.show()
             
 
-test_sorter = Sorter_Framework(96,49)
+test_sorter = Sorter_Framework(28,10)
 test_sorter.load_data()
-#test_sorter.load_neural_model()
-#test_sorter.train_model(False)
-test_sorter.load_weights()
+test_sorter.train_model(False)
+#test_sorter.load_ensemble()
+test_sorter.make_predictions_from_ensemble()
+#test_sorter.load_weights()
 #test_sorter.plot_training()
-test_sorter.make_predictions()
+#test_sorter.make_predictions()
