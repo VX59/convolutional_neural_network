@@ -27,7 +27,10 @@ with st.expander("create new model"):
         group_start = st.slider("group start", 0,39,0)
         if(tkfold): kfold = st.slider("model kfold", 2, 10, 2)
         else: kfold = 0
-        ppr = LEGACYPPR(input_size,classes,kfold,group_start)
+        selected_preprocessor = st.selectbox("select preprocessor", ("legacy", "new"))
+        ppr = None
+        if(selected_preprocessor == "legacy"):  ppr = LEGACYPPR(input_size,classes,kfold,group_start)
+        if(selected_preprocessor == "new"): ppr = NEWPPR(input_size,classes,kfold)  
         col1,col2 = st.columns(2)
         filter_names = ["BLUR", "CONTOUR", "DETAIL", "EDGE_ENHANCE", "EDGE_ENHANCE_MORE",
    "EMBOSS", "FIND_EDGES", "SMOOTH", "SMOOTH_MORE", "SHARPEN"]
@@ -98,7 +101,7 @@ with st.expander("pretrained models"):
         classes=classes.split('_')
         sorter = Sorter_Framework(int(size),class_num=int(classes[0]),ppr=ppr)
 
-        samples = int(st.slider("samples", 0,50,10))
+        samples = int(st.slider("samples", 2,50,10))
         if st.button('run predictions'):
             ppr = LEGACYPPR(input_size,sorter.class_num,kfolds=0, group_start = ppr.group_start)
             sorter.ppr = ppr

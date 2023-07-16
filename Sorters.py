@@ -189,7 +189,7 @@ class Sorter_Framework(object):
     def make_predictions_from_ensemble(self, samples):
         fig, subplot = plt.subplots(samples)
         for i in subplot:
-            sample, label = self.ppr.create_sample()
+            sample, label = self.ppr.create_sample_from_tensor()
             print('label: ', label)
             m = 0
             predictions_acm = []

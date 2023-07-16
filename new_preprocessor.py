@@ -12,7 +12,7 @@ import IPython.display as display
 
 from PIL import ImageFilter
 class preprocessor(object):
-    def __init__(self, SCALE, folds, classes=0):
+    def __init__(self, SCALE, classes, folds):
         os_type = platform.system()
         self.SCALE = SCALE
         self.folds = folds
