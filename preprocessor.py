@@ -8,20 +8,17 @@ import random
 import platform
 import math
 
-# our dataset contains 40 thousand images 800 * 50
+# our dataset contains 40 thousand images 800 * 50 
 # labels are derived from the folder names and correspond to the part
 # this program compresses and labels training images
 
-from PIL.ImageFilter import (
-   BLUR, CONTOUR, DETAIL, EDGE_ENHANCE, EDGE_ENHANCE_MORE,
-   EMBOSS, FIND_EDGES, SMOOTH, SMOOTH_MORE, SHARPEN)
-
+from PIL import ImageFilter
 class preprocessor(object):
-    def __init__(self, SCALE, classes):
+    def __init__(self, SCALE, classes, folds):
 
         self.SCALE = SCALE
         self.classes = classes
-        self.batch_size = 32
+        self.folds = folds
         os_type = platform.system()
         print("running on: ", os_type)
         if os_type == "Windows": path = "/Users/deros/Downloads/dataset/"
@@ -57,7 +54,6 @@ class preprocessor(object):
                     image = Image.open(filepath).convert('L')
                     image.thumbnail((self.SCALE,self.SCALE))
                     image = ImageOps.invert(image)
-                    #image = image.filter(EMBOSS)
                     image = self.encode_pixels(image)
 
                     raw_x.append(image)
@@ -137,8 +133,8 @@ class preprocessor(object):
 
    # this is intended for k fold implementation
    # we need to partition the training data into k random size subsets, a separate classifier will be trained on each subseet
-    def chop_and_fold(self, train_x_sep, train_y_sep, folds=4):
-
+    def chop_and_fold(self, train_x_sep, train_y_sep):
+        folds=self.folds
         # generate random partition ratios
         alpha = 1.0
         partition_ratios = []
@@ -211,7 +207,7 @@ class preprocessor(object):
         label = int(index / 800)
         file = self.dir_list[index]
         filepath = self.working_dir+'/'+file
-
+            
         image = Image.open(filepath).convert('L')
         image.thumbnail((self.SCALE,self.SCALE))
         image = ImageOps.invert(image)

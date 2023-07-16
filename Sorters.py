@@ -4,7 +4,6 @@ from keras.models import load_model
 import os
 import matplotlib.pyplot as plt
 from preprocessor import *
-import random
 import shutil
 
 class Sorter_Framework(object):
@@ -13,10 +12,16 @@ class Sorter_Framework(object):
         self.input_size = input_size
         self.name = name
         self.epochs = 12
+        self.batch_size = 32
+        self.kfold = 4
+        self.lr_decay = 0.95
+        self.learning_rate = 1e-3
+        self.validation_split = 0.35
+        self.estop = 0.5
         self.class_num = class_num
         self.class_names = range(self.class_num)
         self.dimension = str(self.input_size) + 'x' + str(self.class_num)
-        self.prefix = self.dimension + '_sorter/'
+        self.prefix = 'models/'+self.dimension + '_sorter/'
         self.checkpoint_path = self.prefix + "model_training/" + self.name + ".ckpt"
         if not os.path.isdir(self.prefix): os.mkdir(self.prefix)
     def rename_model(self,name):
@@ -36,7 +41,7 @@ class Sorter_Framework(object):
 
     def load_data(self,kfold=True):
 
-        self.input = preprocessor(self.input_size, self.class_num)
+        self.input = preprocessor(self.input_size, self.class_num, folds=self.kfold)
         if kfold:
             if os.path.isdir("tf_fold_ds"):
                 fold_datasets = np.array([])
@@ -77,24 +82,25 @@ class Sorter_Framework(object):
         [   
             augmentation,
             tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.Conv2D(96, 4 ,activation='relu',padding='same'),
+            tf.keras.layers.Conv2D(96, 6 ,activation='relu',padding='same'),
             tf.keras.layers.MaxPool2D(pool_size=(2,2)),
-            tf.keras.layers.Dropout(0.3),
-            tf.keras.layers.Conv2D(64, 4 ,activation='relu',padding='same'),
+            tf.keras.layers.Dropout(0.25),
+            tf.keras.layers.Conv2D(64, 6 ,activation='relu',padding='same'),
             tf.keras.layers.MaxPool2D(pool_size=(2,2)),
-            tf.keras.layers.Dropout(0.3),
-            tf.keras.layers.Conv2D(64, 4 ,activation='relu',padding='same'),
+            tf.keras.layers.Conv2D(64, 6 ,activation='relu',padding='same'),
             tf.keras.layers.MaxPool2D(pool_size=(2,2)),
-            tf.keras.layers.Dropout(0.3),
+            tf.keras.layers.Dropout(0.25),
             tf.keras.layers.Flatten(), 
-            tf.keras.layers.Dense(256,activation='relu'),
+            tf.keras.layers.Dense(128,activation='relu'),
+            tf.keras.layers.Dense(128,activation='relu'),
+            tf.keras.layers.Dense(64,activation='relu'),
             tf.keras.layers.Dense(self.class_num),
         ])
 
         lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
-            1e-3,
+            self.learning_rate,
             decay_steps=1000,
-            decay_rate=0.95,
+            decay_rate=self.lr_decay,
             staircase=True)
 
         optimizer = tf.keras.optimizers.Adam(lr_schedule)
@@ -125,7 +131,7 @@ class Sorter_Framework(object):
                                                  save_weights_only=True,
                                                  verbose=1)
 
-        early_stopping = tf.keras.callbacks.EarlyStopping(patience=int(self.epochs * 0.5))
+        early_stopping = tf.keras.callbacks.EarlyStopping(patience=int(self.epochs * self.estop))
 
         def train(model, train_x, train_y, i=0, persistance=persistance):
             if persistance: 
@@ -136,11 +142,11 @@ class Sorter_Framework(object):
             train_x,
             train_y,
             epochs=self.epochs,
-            batch_size= self.input.batch_size,
-            validation_split=0.4,
+            batch_size= self.batch_size,
+            validation_split=self.validation_split,
             callbacks=[cp_callback, early_stopping])  # Pass callback to training
 
-            model.save(self.dimension+f'_sorter/saved_models/MODEL_{i}'+self.name+'.h5')
+            model.save(self.prefix+f'saved_models/MODEL_{i}'+self.name+'.h5')
 
             return history 
 
@@ -151,7 +157,7 @@ class Sorter_Framework(object):
                 print("fold: ", k)
                 CNN = self.load_neural_model()
                 for j in range(len(self.fold_x)):
-                    if j != k:
+                    if j == k:
                         history = train(CNN, self.fold_x[j], self.fold_y[j], i=k, persistance=persistance)
                         self.history_ensemble.append(history)
                 self.models.append(CNN)
@@ -180,8 +186,8 @@ class Sorter_Framework(object):
         ax2.legend(['val loss', 'val accuracy'], loc='lower left')
         plt.savefig(plot_path+name+".png")
 
-    def make_predictions_from_ensemble(self):
-        fig, subplot = plt.subplots(10)
+    def make_predictions_from_ensemble(self, samples):
+        fig, subplot = plt.subplots(samples)
         for i in subplot:
             sample, label, image = self.input.create_sample()
             print('label: ', label)
@@ -208,6 +214,7 @@ class Sorter_Framework(object):
 
         plt.savefig(self.prefix+'predictions.png')
         plt.show()
+        return fig
 
     def make_predictions(self):
 
@@ -236,21 +243,15 @@ class Sorter_Framework(object):
             plot[predicted_label].set_color('red')
             plot[label].set_color('blue')
 
-        plt.show()
-
-test_sorter = Sorter_Framework(32,8)
-
-def make_sorter():
+def make_sorter(test_sorter):
     if os.path.isdir("tf_test_ds"): os.rmdir("tf_test_ds")
     if os.path.isdir("tf_train_ds"): os.rmdir("tf_train_ds")
     if os.path.isdir("tf_fold_ds"): shutil.rmtree("tf_fold_ds")
     test_sorter.load_data()
     test_sorter.train_model(False)
 
-def get_predictions():
+def get_predictions(test_sorter,samples):
     test_sorter.load_data()
     test_sorter.load_ensemble()
-    test_sorter.make_predictions_from_ensemble()
-
-make_sorter()
-get_predictions()
+    fig = test_sorter.make_predictions_from_ensemble(samples)
+    return fig
