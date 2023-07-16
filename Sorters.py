@@ -7,8 +7,8 @@ from preprocessor import *
 import shutil
 
 class Sorter_Framework(object):
-    def __init__(self,input_size,class_num=0,name=''):
-
+    def __init__(self,input_size,class_num,ppr:preprocessor,name=''):
+        self.ppr:preprocessor = ppr
         self.input_size = input_size
         self.name = name
         self.epochs = 12
@@ -40,8 +40,10 @@ class Sorter_Framework(object):
         return (x_data, y_data)
 
     def load_data(self,kfold=True):
-
-        self.input = preprocessor(self.input_size, self.class_num, folds=self.kfold)
+        if(self.ppr==None):
+            print("please configure a preprocessor")
+            return -1
+        else: print(self.ppr)
         if kfold:
             if os.path.isdir("tf_fold_ds"):
                 fold_datasets = np.array([])
@@ -50,11 +52,9 @@ class Sorter_Framework(object):
                 list_dir = os.listdir("tf_fold_ds")
                 for dspath in list_dir:
                     dataset = tf.data.experimental.load("tf_fold_ds/")
-                    print(dataset)
                     np.append(fold_datasets, dataset)
-                    print(fold_datasets.shape)
             else:
-                fold_datasets, test_ds = self.input.select_data(kfold=True)
+                fold_datasets, test_ds = self.ppr.select_data(kfold=True)
                 self.fold_x = []
                 self.fold_y = []
             
@@ -64,7 +64,7 @@ class Sorter_Framework(object):
                 self.fold_y.append(fold_y)
             self.test_x, self.test_y = self.split_data(test_ds)
         else:
-            train_ds, test_ds = self.input.select_data()
+            train_ds, test_ds = self.ppr.select_data()
             self.train_x, self.train_y = self.split_data(train_ds)
             self.test_x, self.test_y = self.split_data(test_ds)
 
@@ -189,7 +189,7 @@ class Sorter_Framework(object):
     def make_predictions_from_ensemble(self, samples):
         fig, subplot = plt.subplots(samples)
         for i in subplot:
-            sample, label, image = self.input.create_sample()
+            sample, label = self.ppr.create_sample()
             print('label: ', label)
             m = 0
             predictions_acm = []
@@ -220,7 +220,7 @@ class Sorter_Framework(object):
 
         fig, subplot = plt.subplots(10)
         for i in subplot:
-            sample, label, image = self.input.create_sample()
+            sample, label = self.ppr.create_sample_from_tensor()
             print('label: ', label)
             prediction = self.CNN.predict(sample)
             print(prediction)
@@ -243,12 +243,12 @@ class Sorter_Framework(object):
             plot[predicted_label].set_color('red')
             plot[label].set_color('blue')
 
-def make_sorter(test_sorter):
+def make_sorter(test_sorter,persistance=False):
     if os.path.isdir("tf_test_ds"): os.rmdir("tf_test_ds")
     if os.path.isdir("tf_train_ds"): os.rmdir("tf_train_ds")
     if os.path.isdir("tf_fold_ds"): shutil.rmtree("tf_fold_ds")
     test_sorter.load_data()
-    test_sorter.train_model(False)
+    test_sorter.train_model(persistance)
 
 def get_predictions(test_sorter,samples):
     test_sorter.load_data()
